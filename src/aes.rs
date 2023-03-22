@@ -22,24 +22,81 @@ impl AesKey {
         libaes::Cipher::new_256(&self.key)
     }
 
-    pub fn encrypt(&self, data: &[u8]) -> Vec<u8> {
+    pub fn encrypt(&self, data: &[u8]) -> EncryptedData {
         let cipher = self.get_cipher();
-        cipher.cbc_encrypt(&self.iv, data)
+        EncryptedData::new(cipher.cbc_encrypt(&self.iv, data))
     }
 
-    pub fn decrypt(&self, data: &[u8]) -> Result<Vec<u8>, String> {
+    pub fn decrypt(&self, data: &EncryptedData) -> Result<DecryptedData, String> {
         let cipher = self.get_cipher();
 
-        let result = std::panic::catch_unwind(|| cipher.cbc_decrypt(&self.iv, data));
+        let result = std::panic::catch_unwind(|| cipher.cbc_decrypt(&self.iv, data.as_slice()));
         match result {
-            Ok(result) => Ok(result),
+            Ok(result) => {
+                if result.is_empty() {
+                    return Err("AesKey: decryption failed: empty result".to_string());
+                }
+
+                Ok(DecryptedData::new(result))
+            }
             Err(err) => Err(format!("AesKey: decryption failed: {:?}", err)),
         }
     }
 }
 
+pub struct EncryptedData {
+    data: Vec<u8>,
+}
+
+impl EncryptedData {
+    pub fn new(data: Vec<u8>) -> Self {
+        Self { data }
+    }
+
+    pub fn from_base_64(base64: &str) -> Self {
+        use base64::Engine;
+        let data = base64::engine::general_purpose::STANDARD
+            .decode(base64.as_bytes())
+            .unwrap();
+        Self { data }
+    }
+
+    pub fn into_bytes(self) -> Vec<u8> {
+        self.data
+    }
+
+    pub fn as_base_64(&self) -> String {
+        use base64::Engine;
+        base64::engine::general_purpose::STANDARD.encode(&self.data)
+    }
+
+    pub fn as_slice(&self) -> &[u8] {
+        &self.data
+    }
+}
+
+pub struct DecryptedData {
+    data: Vec<u8>,
+}
+
+impl DecryptedData {
+    pub fn new(data: Vec<u8>) -> Self {
+        Self { data }
+    }
+
+    pub fn into_bytes(self) -> Vec<u8> {
+        self.data
+    }
+
+    pub fn into_string(self) -> String {
+        String::from_utf8(self.data).unwrap()
+    }
+}
+
 #[cfg(test)]
 mod test {
+
+    use crate::aes::EncryptedData;
 
     use super::AesKey;
 
@@ -54,9 +111,9 @@ mod test {
         let encrypted = key.encrypt(plaintext);
 
         // Decryption
-        let decrypted = key.decrypt(&encrypted[..]).unwrap();
+        let decrypted = key.decrypt(&encrypted).unwrap();
 
-        assert_eq!(decrypted, plaintext);
+        assert_eq!(decrypted.into_bytes(), plaintext);
     }
 
     #[test]
@@ -69,8 +126,10 @@ mod test {
         // Encryption
         let encrypted = key.encrypt(plaintext);
 
+        let slice_encrypted = encrypted.as_slice()[..3].to_vec();
+
         // Decryption
-        let decrypted = key.decrypt(&encrypted[..5]);
+        let decrypted = key.decrypt(&EncryptedData::new(slice_encrypted));
 
         assert!(decrypted.is_err());
     }
@@ -87,6 +146,6 @@ mod test {
 
         let encrypted2 = key.encrypt(plaintext);
 
-        assert_eq!(encrypted1, encrypted2);
+        assert_eq!(encrypted1.as_base_64(), encrypted2.as_base_64());
     }
 }
