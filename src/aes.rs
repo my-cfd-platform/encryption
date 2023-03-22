@@ -22,12 +22,12 @@ impl AesKey {
         libaes::Cipher::new_256(&self.key)
     }
 
-    pub fn encrypt(&self, data: &[u8]) -> EncryptedData {
+    pub fn encrypt(&self, data: &[u8]) -> AesEncryptedData {
         let cipher = self.get_cipher();
-        EncryptedData::new(cipher.cbc_encrypt(&self.iv, data))
+        AesEncryptedData::new(cipher.cbc_encrypt(&self.iv, data))
     }
 
-    pub fn decrypt(&self, data: &EncryptedData) -> Result<DecryptedData, String> {
+    pub fn decrypt(&self, data: &AesEncryptedData) -> Result<AesDecryptedData, String> {
         let cipher = self.get_cipher();
 
         let result = std::panic::catch_unwind(|| cipher.cbc_decrypt(&self.iv, data.as_slice()));
@@ -37,18 +37,18 @@ impl AesKey {
                     return Err("AesKey: decryption failed: empty result".to_string());
                 }
 
-                Ok(DecryptedData::new(result))
+                Ok(AesDecryptedData::new(result))
             }
             Err(err) => Err(format!("AesKey: decryption failed: {:?}", err)),
         }
     }
 }
 
-pub struct EncryptedData {
+pub struct AesEncryptedData {
     data: Vec<u8>,
 }
 
-impl EncryptedData {
+impl AesEncryptedData {
     pub fn new(data: Vec<u8>) -> Self {
         Self { data }
     }
@@ -75,11 +75,11 @@ impl EncryptedData {
     }
 }
 
-pub struct DecryptedData {
+pub struct AesDecryptedData {
     data: Vec<u8>,
 }
 
-impl DecryptedData {
+impl AesDecryptedData {
     pub fn new(data: Vec<u8>) -> Self {
         Self { data }
     }
@@ -96,7 +96,7 @@ impl DecryptedData {
 #[cfg(test)]
 mod test {
 
-    use crate::aes::EncryptedData;
+    use crate::aes::AesEncryptedData;
 
     use super::AesKey;
 
@@ -129,7 +129,7 @@ mod test {
         let slice_encrypted = encrypted.as_slice()[..3].to_vec();
 
         // Decryption
-        let decrypted = key.decrypt(&EncryptedData::new(slice_encrypted));
+        let decrypted = key.decrypt(&AesEncryptedData::new(slice_encrypted));
 
         assert!(decrypted.is_err());
     }
