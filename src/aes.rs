@@ -53,12 +53,14 @@ impl AesEncryptedData {
         Self { data }
     }
 
-    pub fn from_base_64(base64: &str) -> Self {
+    pub fn from_base_64(base64: &str) -> Result<Self, String> {
         use base64::Engine;
-        let data = base64::engine::general_purpose::STANDARD
-            .decode(base64.as_bytes())
-            .unwrap();
-        Self { data }
+        let data = base64::engine::general_purpose::STANDARD.decode(base64.as_bytes());
+
+        match data {
+            Ok(data) => Ok(Self { data }),
+            Err(err) => Err(format!("Can not decode base64: {}", err)),
+        }
     }
 
     pub fn into_bytes(self) -> Vec<u8> {
